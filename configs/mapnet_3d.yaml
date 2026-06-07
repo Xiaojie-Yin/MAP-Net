@@ -1,0 +1,233 @@
+# ========================================
+# MAP-Net 3D CT-to-PET synthesis config
+# ========================================
+
+project:
+  name: MAP-Net
+  task: CT-to-PET synthesis
+  version: 3d
+
+seed: 42
+
+system:
+  deterministic: false
+  cudnn_benchmark: true
+
+# ========================================
+# Data
+# ========================================
+# Legacy compatibility for older scripts.
+data_root: "/workspace/dataset_I2I/CT2PET_nii_eso/nii_test"
+
+data:
+  root: "/workspace/dataset_I2I/CT2PET_nii_eso/nii_test"
+  mask_root: "/workspace/dataset_I2I/CT2PET_nii_eso/MASK_cropped"
+  split_csv: "/workspace/dataset_I2I/CT2PET_nii_eso/nii_test/split_mapnet_3d.csv"
+  use_prior: true
+
+# ========================================
+# Dataset and patch extraction
+# ========================================
+dataset:
+  # Patient-level split: train / validation / internal test.
+  split_ratios: [0.75, 0.125, 0.125]
+  overwrite_split: false
+
+  # Input volume processing.
+  hw_target: [256, 256]
+  center_crop_ratio: 1.0
+
+  # 3D patch-based training.
+  patch_size: [32, 96, 96]
+  stride: [16, 48, 48]
+
+  # Positive patch sampling.
+  balance_positive: true
+  pos_ratio: 0.7
+  suv_thr: 2.5
+
+  # Structural prior.
+  use_prior: true
+  mask_root: "/workspace/dataset_I2I/CT2PET_nii_eso/MASK_cropped"
+  allow_missing_prior: false
+
+  # Visualization compatibility.
+  return_vis: false
+
+# ========================================
+# Online data augmentation
+# ========================================
+augmentation:
+  enable: true
+
+  # Geometric augmentation.
+  flip_lr_prob: 0.5
+  flip_ap_prob: 0.0
+
+  rotation_prob: 0.3
+  rotation_degrees: 10.0
+
+  scale_prob: 0.3
+  scale_range: [0.9, 1.1]
+
+  elastic_prob: 0.1
+  elastic_alpha: 4.0
+  elastic_sigma: 8.0
+
+  # CT intensity augmentation.
+  gaussian_noise_prob: 0.15
+  gaussian_noise_std: 0.02
+
+  gamma_prob: 0.15
+  gamma_range: [0.8, 1.2]
+
+# ========================================
+# Model
+# ========================================
+model:
+  name: MAPNet3D
+
+  # CT + esophagus SDM.
+  in_ch: 2
+  out_ch: 1
+
+  # Generator width.
+  base_ch: 32
+
+  # High-uptake mask branch.
+  enable_mask: true
+
+  # Metabolic-Guided Cross-Attention.
+  enable_mgca: true
+  mgca_window: [4, 4, 4]
+  mgca_heads: 2
+  mgca_alpha: 0.2
+
+  # PET output is trained in normalized [-1, 1] domain.
+  output_activation: "none"
+
+# ========================================
+# Frequency-aware Dual Discriminator
+# ========================================
+discriminator:
+  # "fdd" for MAP-Net full setting.
+  # "patchgan" for standard spatial discriminator ablation.
+  type: "fdd"
+
+  base_ch: 64
+
+  # High-frequency cutoff ratio.
+  r0_ratio: 0.4
+
+  # Spatial and spectral branch weights.
+  alpha: 1.0
+  beta: 1.0
+
+# ========================================
+# Loss
+# ========================================
+loss:
+  # Main reconstruction and adversarial losses.
+  lambda_rec: 1.0
+  lambda_adv: 0.1
+
+  # These metabolic losses are kept as optional switches.
+  # The manuscript setting below keeps them disabled unless explicitly used.
+  lambda_mtv: 0.0
+  mtv_thrs: [2.5, 4.0, 5.0]
+  mtv_tau: 0.6
+  mtv_mode: "relative"
+  mtv_weights: null
+
+  lambda_tlg: 0.0
+  tlg_thrs: [2.5, 4.0, 5.0]
+  tlg_tau: 0.6
+  tlg_mode: "relative"
+
+  lambda_sum: 0.0
+  sum_mask: "gt"
+  sum_norm: "sum_gt"
+
+  lambda_sparse: 0.0
+  sparse_thr: 2.5
+  sparse_tau: 0.5
+  sparse_reduce: "mean_over_mask"
+
+  lambda_grad: 0.0
+
+# ========================================
+# High-uptake mask branch
+# ========================================
+mask:
+  enable: true
+
+  threshold:
+    suv: 2.5
+
+  loss:
+    # Weighted Dice smoothing.
+    kappa: 0.01
+    w_bg: 0.2
+    w_fg: 0.8
+
+    # Paper setting:
+    # lambda_mask = 0.5, Dice and CE are equally weighted.
+    lambda_dice: 0.25
+    lambda_ce_all: 0.25
+
+    w_bg_ce: 0.1
+    w_fg_ce: 0.9
+
+    # Cross-task consistency between predicted mask and sPET-threshold mask.
+    # Corresponds to lambda_cross = 0.2.
+    lambda_consistency: 0.2
+
+    # Disabled by default to keep the released config aligned with manuscript text.
+    lambda_sparse: 0.0
+    target_fg_ratio: 0.01
+
+  vis:
+    save_masks: true
+
+# ========================================
+# Training
+# ========================================
+train:
+  batch_size: 8
+  num_workers: 4
+
+  epochs: 200
+
+  # Fixed learning rate in the manuscript.
+  lr: 2.0e-4
+  lr_d: 2.0e-4
+
+  optimizer: "adam"
+  beta1: 0.5
+  beta2: 0.999
+
+  use_scheduler: false
+  lr_step: 50
+  lr_gamma: 0.5
+
+# ========================================
+# Inference
+# ========================================
+inference:
+  patch_size: [32, 96, 96]
+  stride: [16, 48, 48]
+  overlap_mode: "average"
+
+# ========================================
+# Output
+# ========================================
+out:
+  out_dir: "outputs/mapnet_3d"
+  ckpt_dir: "outputs/mapnet_3d/ckpt"
+  vis_dir: "outputs/mapnet_3d/vis"
+
+  log_interval: 200
+  vis_interval: 1000
+  eval_interval: 1000
+  save_every: 10
+  nrow: 6
