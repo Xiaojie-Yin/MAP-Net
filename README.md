@@ -722,14 +722,6 @@ The clinical CT and PET data used in this study cannot be publicly released due 
 
 ---
 
-## Model Weights
-
-Trained model weights will be made available upon publication, subject to institutional policy.
-
-If weights are not included, users may train MAP-Net using their own paired CT/PET data.
-
----
-
 ## Citation
 
 If you use this code, please cite:
