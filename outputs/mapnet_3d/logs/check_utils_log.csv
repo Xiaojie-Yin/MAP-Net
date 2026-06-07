@@ -1,2 +1,0 @@
-epoch,iter,lr_g,lr_d,adv_weight,D,G,REC,ADV,AUX,MTV,TLG,SUM,SP,GR,Dr,Df,mask_dice,mask_ce,mask_cons,mask_sparse
-0,0,,,,1.0,2.0,,,,,,,,,,,,,,
